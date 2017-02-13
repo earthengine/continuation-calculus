@@ -42,6 +42,7 @@ Simple terms are terms where all sub-terms are atoms.
 
 ```
 SimpleTerm :: Atom | Atom "." SimpleTerm
+```
 
 ### Rule Term
 A rule term is either a simple term, or its last term is a simple term.
