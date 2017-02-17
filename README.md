@@ -23,12 +23,16 @@ Add
 
 ## Terms
 A term starts with an atom, following by zero or more terms.
+There are two restricted versions of a term: simple term and rule term.
+Simple term used for rule declarations, and rule term for rule definitions.
+Unrestricted terms appear in the middle of evaluation. It represents the rest
+of the program.
 
 ```
 Term :: Atom | Term "." Atom | Term ".(" Term ")"
 ```
 
-The followings are Terms (note we use :
+The followings are Terms:
 
 ```
 r0.v0.v1.r
@@ -38,7 +42,8 @@ Add.1.(Add.2.3).r
 ```
 
 ### Simple Terms
-Simple terms are terms where all sub-terms are atoms.
+Simple terms are terms where all sub-terms are atoms. Simple terms was not mentioned in
+the original paper, but it was implied.
 
 ```
 SimpleTerm :: Atom | Atom "." SimpleTerm
@@ -53,10 +58,18 @@ RuleTerm :: SimpleTerm | SimpleTerm ".(" SimpleTerm ")"
 
 ## Rules
 A rule is a combination of a declaration, which is a simple term, and a definition,
-which is a rule term.
+which is a rule term. 
+
+The declaration part have all arguments named, and the definition use all named arguments
+and refer to 
+
+```
+Rule :: SimpleTerm "->" RuleTerm
+```
 
 ## Program
 A set of rules, some of them are named and marked to be available to external code.
 
+Note, by the definition above, the grammar of Program does not contain free terms. 
 
-
+## Evaluation

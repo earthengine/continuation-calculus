@@ -4,200 +4,16 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
 using System;
-using System.Collections.ObjectModel;
 
 namespace Continuation_Calculus.Version1
 {
-    public class Atom
-    {
-        private readonly string name;
-
-        public Atom(string v)
-        {
-            this.name = v;
-        }
-
-        public string Name { get { return name; } }
-
-        public override bool Equals(object obj)
-        {
-            return (obj as Atom)?.name == name;
-        }
-        public override int GetHashCode()
-        {
-            return HashHelper.Base.HashObject(name);
-        }
-        public override string ToString()
-        {
-            return name;
-        }
-    }
-
-    public class Term
-    {
-        private Atom head;
-        private List<Term> args = new List<Term>();
-
-        public Term(Atom h)
-        {
-            head = h;
-        }
-        public Term(Atom h, IEnumerable<Term> args)
-        {
-            head = h;
-            this.args.AddRange(args);
-        }
-        public override bool Equals(object obj)
-        {
-            if (!(obj is Term)) return false;
-            var t = obj as Term;
-            return t.head.Equals(head) & Enumerable.SequenceEqual(args, t.args);
-        }
-        public override int GetHashCode()
-        {
-            return HashHelper.Base.HashObject(head)
-                                  .HashEnumerable(args);
-        }
-        public override string ToString()
-        {
-            var sb = new StringBuilder();
-            sb.Append(head);
-            if (args.Any())
-            {
-                foreach (var t in args)
-                {
-                    sb.Append('.');
-                    if (t.args.Any())
-                    {
-                        sb.Append("(");
-                        sb.Append(t);
-                        sb.Append(")");
-                    }
-                    else
-                    {
-                        sb.Append(t);
-                    }
-                }
-            }
-            return sb.ToString();
-        }
-
-        public string Head { get { return head.Name; } }
-        public IEnumerable<Term> Args { get { return args; } }
-    }
-    public class SimpleTerm
-    {
-        private readonly Atom head;
-        private readonly List<Atom> args;
-
-        public SimpleTerm(Atom h)
-        {
-            this.head = h;
-            args = new List<Atom>();
-        }
-
-        public SimpleTerm(Atom h, IEnumerable<Atom> args)
-        {
-            this.head = h;
-            this.args = args.ToList();
-        }
-        public override bool Equals(object obj)
-        {
-            var st = obj as SimpleTerm;
-            return st != null && st.head == head &&
-                Enumerable.SequenceEqual(st.args, args);
-        }
-        public override int GetHashCode()
-        {
-            return HashHelper.Base
-                .HashObject(head)
-                .HashEnumerable(args);
-        }
-        public override string ToString()
-        {
-            return string.Join(".", new[] { head.ToString() }.Concat(args.Select(a => a.ToString())).ToArray(), 0, args.Count + 1);
-        }
-
-        public Atom Head { get { return head; } }
-        public IEnumerable<Atom> Args { get { return args; } }
-
-        public Term Substitute(Dictionary<Atom, Term> subs)
-        {
-            var h = subs.ContainsKey(head) ? subs[head] : new Term(head);
-            var args1 = args.Select(a => subs.ContainsKey(a) ? subs[a] : new Term(a));
-            return new Term(new Atom(h.Head), h.Args.Concat(args1));
-        }
-    }
-    public class RuleTerm
-    {
-        private readonly SimpleTerm mainPart;
-        private readonly SimpleTerm tailPart;
-
-        public Atom Head { get { return mainPart.Head; } }
-
-        public RuleTerm(SimpleTerm mp)
-        {
-            this.mainPart = mp;
-            this.tailPart = null;
-        }
-        public RuleTerm(SimpleTerm mp, SimpleTerm tp)
-        {
-            if (tp.Args.Any())
-            {
-                this.mainPart = mp;
-                this.tailPart = tp;
-            }
-            else
-                this.mainPart = new SimpleTerm(mp.Head, mp.Args.Concat(new[] { tp.Head }));
-        }
-        public override bool Equals(object obj)
-        {
-            var rt = obj as RuleTerm;
-            return rt != null && rt.mainPart == mainPart &&
-                rt.tailPart == tailPart;
-        }
-        public override int GetHashCode()
-        {
-            return HashHelper.Base
-                .HashObject(mainPart)
-                .HashObject(tailPart);
-        }
-        public override string ToString()
-        {
-            if (tailPart == null) return mainPart.ToString();
-            else return $"{mainPart}.({tailPart})";
-        }
-
-        internal RuleTerm Rename(string oldname, string newname)
-        {
-            var h = mainPart.Head.Name == oldname ? new Atom(newname) : mainPart.Head;
-            var args = mainPart.Args.Select(a => a.Name == oldname ? new Atom(newname) : a);
-            var nmain = new SimpleTerm(h, args);
-            if (tailPart != null)
-            {
-                h = tailPart.Head.Name == oldname ? new Atom(oldname) : tailPart.Head;
-                args = tailPart.Args.Select(a => a.Name == oldname ? new Atom(newname) : a);
-                return new RuleTerm(nmain, new SimpleTerm(h, args));
-            }
-            else return new RuleTerm(nmain);
-        }
-
-        public Term Substitute(Dictionary<Atom, Term> subs)
-        {
-            var mp = mainPart.Substitute(subs);
-            if (tailPart == null) return mp;
-
-            var tp = tailPart.Substitute(subs);
-            return new Term(new Atom(mp.Head), mp.Args.Concat(new[] { tp }));
-        }
-    }
     public class Rule
     {
         private readonly SimpleTerm declare;
         private readonly RuleTerm body;
 
-        public string RuleName { get { return declare.Head.Name; } }
-        public IEnumerable<string> Args { get { return declare.Args.Select(a => a.Name); } }
+        public string RuleName { get { return declare.Head; } }
+        public IEnumerable<string> Args { get { return declare.Args.Select(a => a.Head); } }
         public RuleTerm Body { get { return body; } }
 
         public Rule(SimpleTerm st, RuleTerm rt)
@@ -220,13 +36,6 @@ namespace Continuation_Calculus.Version1
         {
             return declare.ToString() + " -> " + body.ToString();
         }
-        public Rule Rename(string oldname, string newname)
-        {
-            var rn = new Atom(RuleName == oldname ? newname : oldname);
-            var rh = new SimpleTerm(rn, Args.Select(s => new Atom(s)));
-            var rb = Body.Rename(oldname, newname);
-            return new Rule(rh, rb);
-        }
     }
 
     public class Program
@@ -234,7 +43,7 @@ namespace Continuation_Calculus.Version1
         private List<Rule> rules = new List<Rule>();
         private Dictionary<string, object> values = new Dictionary<string, object>();
         private List<KeyValuePair<object, string>> paramMapping1 = new List<KeyValuePair<object, string>>();
-        private Rule lastRule1;
+        private Rule lastRule;
 
         public Rule FindRule(string name)
         {
@@ -253,23 +62,9 @@ namespace Continuation_Calculus.Version1
         internal void AddRule(Rule r)
         {
             rules.Add(r);
-            lastRule1 = r;
+            lastRule = r;
         }
-        public void RenameRules(string oldname, string newname)
-        {
-            rules = rules.Select(r => r.Rename(oldname, newname)).ToList();
-        }
-        public Program Merge(Program p2)
-        {
-            var p = new Program();
-            p.rules.AddRange(rules);
-            p.rules.AddRange(rules.Select((r, i) =>
-                r.Rename(r.RuleName, $"{i}")));
-            p.rules.AddRange(p2.rules.Select((r, i) => 
-                r.Rename(r.RuleName, $"{i + rules.Count}")));
-            p.values = values.Concat(p2.values).ToDictionary(kp => kp.Key, kp => kp.Value);
-            return p;
-        }
+
         public override string ToString()
         {
             var sb = new StringBuilder();
@@ -300,23 +95,24 @@ namespace Continuation_Calculus.Version1
 
         private Rule AddRule(IEnumerable<object> forwarding, IEnumerable<object> conts, int newparms, string handling, string cont)
         {
-            var rn = new Atom($"r{RulesCount}");
-            var vr = new Atom("r");
+            var rn = Atom.Entry($"r{RulesCount}");
+            var vr = Atom.Parameter("r");
             ClearParamMap();
             var args = forwarding.Union(conts).Select((p, i) =>
             {
-                var a = new Atom($"v{i}");
+                var a = Atom.Parameter($"v{i}");
                 AddToParamMap(p, a.Name);
                 return a;
             }).ToList();
-            var nargs = Enumerable.Repeat(0, newparms).Select((r, i) => new Atom($"v{args.Count() + i}")).ToList();
+            var nargs = Enumerable.Repeat(0, newparms).Select((r, i) => Atom.Parameter($"v{args.Count() + i}")).ToList();
             var rh = new SimpleTerm(rn, args.Concat(new[] { vr }.Concat(nargs)));
             Rule rule;
             if (cont != null)
             {
-                var rb = new RuleTerm(new SimpleTerm(new Atom(handling),
-                    forwarding.Select(p => new Atom(LookupParam(p)))),
-                    new SimpleTerm(new Atom(cont), conts.Select(p => new Atom(LookupParam(p)))
+                var rb = new RuleTerm(new SimpleTerm(Atom.Entry(handling),
+                    forwarding.Select(p => Atom.Parameter(LookupParam(p)))),
+                    new SimpleTerm(Atom.Entry(cont), conts.Distinct()
+                                                        .Select(p => Atom.Parameter(LookupParam(p)))
                                                         .Concat(new[] { vr })
                                                         .Concat(nargs)));
 
@@ -324,112 +120,130 @@ namespace Continuation_Calculus.Version1
             }
             else
             {
-                var rb = new RuleTerm(new SimpleTerm(new Atom(handling), nargs.Concat(new[] { vr })));
+                var rb = new RuleTerm(new SimpleTerm(Atom.Entry(handling), nargs.Concat(new[] { vr })));
                 rule = new Rule(rh, rb);
             }
             AddRule(rule);
-            return lastRule1;
+            return lastRule;
         }
         private Rule AddLambdaRule(RuleConvertState rs, IEnumerable<object> nodeparams)
         {
-            var a1 = rs.m1.Select(mm => mm.Key).Except(nodeparams).ToList();
-            var a2 = rs.m1.Select(mm => mm.Key).Intersect(nodeparams).ToList();
+            var a1 = rs.paramMap.Select(mm => mm.Key).Except(nodeparams).ToList();
+            var a2 = nodeparams.Intersect(rs.paramMap.Select(mm => mm.Key)).ToList();
             ClearParamMap();
 
             var args = a1.Concat(a2).Select((p, i) =>
             {
-                var a = new Atom($"v{i}");
+                var a = Atom.Parameter($"v{i}");
                 AddToParamMap(p, a.Name);
                 return a;
             }).ToList();
-            var nargs = nodeparams.Except(rs.m1.Select(mm => mm.Key)).Select((p, i) => new Atom($"v{i}"));
+            var nargs = nodeparams.Except(rs.paramMap.Select(mm => mm.Key)).Select((p, i) => Atom.Parameter($"v{i}"));
 
-            var vr = new Atom("r");
-            var rn = new Atom($"r{RulesCount}");
+            var vr = Atom.Parameter("r");
+            var rn = Atom.Entry($"r{RulesCount}");
             var rh = new SimpleTerm(rn, args.Concat(nargs).Concat(new[] { vr }));
 
-            var reordered = rs.m1.Select(p => LookupParam(p.Key));
-            var rb = new RuleTerm(new SimpleTerm(new Atom(rs.ru1.RuleName),
-                reordered.Concat(new[] { "r" }).Select(s => new Atom(s))));
+            var reordered = rs.paramMap.Select(p => LookupParam(p.Key));
+            var rb = new RuleTerm(new SimpleTerm(Atom.Entry(rs.rule.RuleName),
+                reordered.Concat(new[] { "r" }).Select(s => Atom.Parameter(s))));
             AddRule(new Rule(rh, rb));
 
-            rn = new Atom($"r{RulesCount}");
+            rn = Atom.Entry($"r{RulesCount}");
             rh = new SimpleTerm(rn, args.Take(a1.Count()).Concat(new[] { vr }));
-            rb = new RuleTerm(new SimpleTerm(vr), new SimpleTerm(new Atom(lastRule1.RuleName), args.Take(a1.Count())));
+            rb = new RuleTerm(new SimpleTerm(vr), new SimpleTerm(Atom.Entry(lastRule.RuleName), args.Take(a1.Count())));
             AddRule(new Rule(rh, rb));
 
             ClearParamMap();
-            a1.Select((p, i) => {
+            a1.Select((p, i) =>
+            {
                 AddToParamMap(p, $"v{i}");
                 return 0;
             }).ToList();
 
-            return lastRule1;
+            return lastRule;
         }
 
-        private struct RuleConvertState{
-            public Rule ru1;
-            public List<KeyValuePair<object, string>> m1;
+        private struct RuleConvertState
+        {
+            public Expression converting;
+            public Rule rule;
+            public List<KeyValuePair<object, string>> paramMap;
         }
-        private RuleConvertState State { get { return new RuleConvertState() { ru1 = lastRule1, m1 = GetParamMap() }; } }
+        private RuleConvertState State
+        {
+            get
+            {
+                return new RuleConvertState()
+                {
+                    rule = lastRule,
+                    paramMap = GetParamMap()
+                };
+            }
+        }
 
         private Rule AddInvocationRule(RuleConvertState exp, IEnumerable<RuleConvertState> paras)
         {
             var paral = paras.ToList();
 
-            var rn = new Atom($"r{RulesCount}");
-            var v0 = new Atom($"v0");
-            var vs = paras.Select((s, i) => new Atom($"v{i + 1}")).ToList();
-            var vr = new Atom("r");
+            var rn = Atom.Entry($"r{RulesCount}");
+            var v0 = Atom.Parameter($"v0");
+            var vs = paras.Select((s, i) => Atom.Parameter($"v{i + 1}")).ToList();
+            var vr = Atom.Parameter("r");
             var rh = new SimpleTerm(rn, new[] { vr, v0 }.Concat(vs));
             var rb = new RuleTerm(new SimpleTerm(v0, vs.Concat(new[] { vr })));
             AddRule(new Rule(rh, rb));
 
             var conts = new List<object>();
 
-            Rule lr = lastRule1;
+            Rule lr = lastRule;
             for (var i = paral.Count() - 1; i >= 0; --i)
             {
-                lr = AddRule(paral[i].m1.Select(mm => mm.Key), conts.Distinct(), i + 1, paral[i].ru1.RuleName, lr.RuleName);
-                conts.AddRange(paral[i].m1.Select(mm => mm.Key));
+                lr = AddRule(paral[i].paramMap.Select(mm => mm.Key), conts, i + 1, paral[i].rule.RuleName, lr.RuleName);
+                conts = paramMapping1.Select(mm => mm.Key).ToList();
             }
-            lr = AddRule(exp.m1.Select(mm => mm.Key), conts, 0, exp.ru1.RuleName, lr.RuleName);
-            conts.AddRange(exp.m1.Select(mm => mm.Key));
+            lr = AddRule(exp.paramMap.Select(mm => mm.Key), conts, 0, exp.rule.RuleName, lr.RuleName);
+            conts.AddRange(exp.paramMap.Select(mm => mm.Key));
             return lr;
         }
         private Rule AddParameterRule(object p)
         {
-            var rn = new Atom($"r{RulesCount}");
-            var v = new Atom("v0");
-            var r = new Atom("r");
+            var rn = Atom.Entry($"r{RulesCount}");
+            var v = Atom.Parameter("v0");
+            var r = Atom.Parameter("r");
             var rh = new SimpleTerm(rn, new[] { v, r });
             var rb = new RuleTerm(new SimpleTerm(r), new SimpleTerm(v));
             ClearParamMap();
             AddRule(new Rule(rh, rb));
             AddToParamMap(p, v.Name);
-            return lastRule1;
+            return lastRule;
         }
         private Rule AddConditionalRule(RuleConvertState c, RuleConvertState t, RuleConvertState f)
         {
-            var lr = AddRule(Enumerable.Empty<ParameterExpression>(), Enumerable.Empty<ParameterExpression>(), 3, "Conditional", "r");
-            lr = AddRule(c.m1.Select(mm => mm.Key).Distinct(), Enumerable.Empty<ParameterExpression>(), 2, c.ru1.RuleName, lr.RuleName);
-            lr = AddRule(t.m1.Select(mm => mm.Key).Distinct(), c.m1.Select(mm => mm.Key).Distinct(), 1, t.ru1.RuleName, lr.RuleName);
-            return AddRule(f.m1.Select(mm => mm.Key).Distinct(), t.m1.Select(mm => mm.Key).Union(c.m1.Select(mm => mm.Key)).Distinct(), 0, 
-                f.ru1.RuleName, lr.RuleName);
+            var rn = Atom.Entry($"r{RulesCount}");
+            IEnumerable<Atom> args = new[] { Atom.Parameter("rt"), Atom.Parameter("rf"), Atom.Parameter("c") };
+            var rh = new SimpleTerm(rn, args);
+            var rb = new RuleTerm(new SimpleTerm(Atom.Entry("If"), args.Skip(2).Concat(args.Take(2))));
+            var lr = new Rule(rh, rb);
+            AddRule(lr);
+
+            //TODO: Implement this
+            throw new NotImplementedException();
+
         }
-        private Rule AddBinaryRule(RuleConvertState r, RuleConvertState l, string rule)
+        private Rule AddBinaryRule(RuleConvertState l, RuleConvertState r, string rule)
         {
             var lr = AddRule(Enumerable.Empty<ParameterExpression>(), Enumerable.Empty<ParameterExpression>(), 2, rule, null);
 
-            lr = AddRule(r.m1.Select(mm => mm.Key).Distinct(), Enumerable.Empty<ParameterExpression>(), 1, r.ru1.RuleName, lr.RuleName);
+            lr = AddRule(r.paramMap.Select(mm => mm.Key), Enumerable.Empty<ParameterExpression>(), 1, r.rule.RuleName, lr.RuleName);
 
-            return AddRule(l.m1.Select(mm => mm.Key).Distinct(), r.m1.Select(mm => mm.Key).Distinct(), 0, l.ru1.RuleName, lr.RuleName);
+            return AddRule(l.paramMap.Select(mm => mm.Key), r.paramMap.Select(mm => mm.Key).Distinct(), 0, l.rule.RuleName, lr.RuleName);
         }
         private Rule AddUnaryRule(RuleConvertState o, string rule)
         {
             var lr = AddRule(Enumerable.Empty<ParameterExpression>(), Enumerable.Empty<ParameterExpression>(), 2, rule, null);
 
-            return AddRule(o.m1.Select(mm => mm.Key).Distinct(), Enumerable.Empty<ParameterExpression>(), 1, o.ru1.RuleName, lr.RuleName);
+            return AddRule(o.paramMap.Select(mm => mm.Key), Enumerable.Empty<ParameterExpression>(), 1, o.rule.RuleName, lr.RuleName);
         }
         private Rule AddConstantRule(string rule)
         {
@@ -439,7 +253,7 @@ namespace Continuation_Calculus.Version1
         public static Program FromExpression<T>(Expression<T> ex)
         {
             var r = new ProgramVisitor();
-            var e = r.Visit(ex.Body);
+            var e = r.Visit(ex);
             return r.prog;
         }
 
@@ -557,7 +371,7 @@ namespace Continuation_Calculus.Version1
                 return BuildUnaryRule(prog.State, $"TypeIs{node.TypeOperand}", r);
             }
             protected override Expression VisitConditional(ConditionalExpression node)
-            {               
+            {
                 var rcond = Visit(node.Test);
                 var stc = prog.State;
                 var rt = Visit(node.IfTrue);
@@ -578,7 +392,7 @@ namespace Continuation_Calculus.Version1
             protected override Expression VisitLambda<T>(Expression<T> node)
             {
                 var r = Visit(node.Body);
-                
+
                 prog.AddLambdaRule(prog.State, node.Parameters);
 
                 return Expression.Lambda<T>(r, node.Parameters);
@@ -592,7 +406,8 @@ namespace Continuation_Calculus.Version1
             {
                 var rexp = Visit(node.Expression);
                 var st = prog.State;
-                var paras = node.Arguments.Select(e => {
+                var paras = node.Arguments.Select(e =>
+                {
                     Visit(e);
                     return new { prog.State, e };
                 }).ToList();
@@ -606,7 +421,7 @@ namespace Continuation_Calculus.Version1
         }
     }
 
-    public static class Programs
+    public static class ProgramExecution
     {
         public class InsuficiantArgumentsException : Exception
         {
@@ -617,7 +432,7 @@ namespace Continuation_Calculus.Version1
 
         }
 
-        public static Term Eval(this Program p, Term t)
+        public static ITerm Eval(this Program p, ITerm t)
         {
             var r = p.FindRule(t.Head);
             if (r == null)
@@ -628,10 +443,10 @@ namespace Continuation_Calculus.Version1
                 throw new InsuficiantArgumentsException();
 
             var dict = r.Args.Zip(t.Args, (s, te) =>
-                new { s, te }).ToDictionary(ste => new Atom(ste.s), ste => ste.te);
-            return r.Body.Substitute(dict);            
+                new { s, te }).ToDictionary(ste => Atom.Parameter(ste.s), ste => ste.te);
+            return r.Body.Subsitute(dict);
         }
-        public static Term Run(this Program p, Term t, StringBuilder sb)
+        public static ITerm Run(this Program p, ITerm t, StringBuilder sb)
         {
             sb.AppendLine(t.ToString());
             for (;;)
@@ -642,6 +457,32 @@ namespace Continuation_Calculus.Version1
                 if (nt == t) return t;
                 t = nt;
             }
+        }
+        public static ITerm Run(this Program p, ITerm t)
+        {
+            for (;;)
+            {
+                var nt = p.Eval(t);
+                if (nt == t) return t;
+                t = nt;
+            }
+        }
+        public static void EvalRule(this Program p, ITerm t)
+        {
+            var r = p.FindRule(t.Head);
+            if (r == null) return;
+
+            var pars = t.GetAtoms().Where(a => a.HeadIsParameter).Distinct();
+            var nps = r.Args.Count() - t.Args.Count();
+            if (nps < 0) throw new ArgumentOverflowException();
+            var npars = Enumerable.Repeat(0, nps).Select((_, i) => Atom.Parameter($"v{pars.Count() + i}"));
+
+            ITerm nt = new Term(t.GetHead(), t.Args.Concat(npars));
+            nt = p.Run(nt);
+
+            var rn = Atom.Entry($"r{p.RulesCount}");
+
+
         }
     }
 }
